@@ -1,0 +1,13 @@
+[Unit]
+Description=ELAD FDM-S2 FPGA Firmware Loader
+After=network.target
+
+[Service]
+Type=oneshot
+ExecStartPre=/bin/systemctl stop openwebrx
+ExecStart=/usr/local/bin/elad-init.sh 4
+ExecStartPost=/bin/systemctl start openwebrx
+RemainAfterExit=yes
+
+[Install]
+WantedBy=multi-user.target
