@@ -100,3 +100,30 @@ Add devices in OpenWebRX settings. Example for all sample rates:
 
 ## License
 GPL v3
+
+## Compatible Software
+
+Since this is a SoapySDR plugin, it works with any SoapySDR-compatible software:
+
+| Software | Status | Notes |
+|----------|--------|-------|
+| OpenWebRX | ✅ Tested | Full integration included |
+| SDR++ | ✅ Compatible | Select SoapySDR source, driver=elad |
+| GQRX | ✅ Compatible | Select SoapySDR source, driver=elad |
+| GNU Radio | ✅ Compatible | Via gr-soapy block |
+| CubicSDR | ✅ Compatible | Select SoapySDR source |
+| SDRangel | ✅ Compatible | Select SoapySDR source |
+
+### Usage with non-OpenWebRX software
+
+Before launching any software, program the FPGA with the desired sample rate:
+```bash
+sudo /usr/local/bin/elad-firmware + 6   # 6144 kHz
+sudo /usr/local/bin/elad-firmware + 5   # 3072 kHz
+sudo /usr/local/bin/elad-firmware + 4   # 1536 kHz
+sudo /usr/local/bin/elad-firmware + 3   # 768 kHz
+sudo /usr/local/bin/elad-firmware + 2   # 384 kHz
+sudo /usr/local/bin/elad-firmware + 1   # 192 kHz
+```
+
+Then select the device in your software using: `driver=elad`
