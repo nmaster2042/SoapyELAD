@@ -127,3 +127,40 @@ sudo /usr/local/bin/elad-firmware + 1   # 192 kHz
 ```
 
 Then select the device in your software using: `driver=elad`
+
+## Profile Manager
+
+A command-line tool to manage OpenWebRX profiles across all ELAD FDM-S2 devices.
+
+### Features
+- List all profiles across all devices
+- Add a profile to ALL devices at once
+- Add a profile to SELECTED devices
+- Delete a profile from ALL or SELECTED devices
+- Copy a profile from one device to others
+- Automatic OpenWebRX restart after changes
+
+### Usage
+
+**English version:**
+\`\`\`bash
+profile-rx-en
+\`\`\`
+
+**Italian version:**
+\`\`\`bash
+profile-rx
+\`\`\`
+
+### Profile fields
+- **Name**: Profile display name (e.g. "NDB 927kHz")
+- **Frequency**: Center frequency in MHz (e.g. 0.927 for 927 kHz)
+- **Mode**: am, usb, lsb, cw, wfm, nfm, dab
+
+### Files
+| File | Description |
+|------|-------------|
+| elad-profiles-en.py | Profile manager (English) |
+| elad-profiles.py | Profile manager (Italian) |
+| profile-rx-en | English launcher |
+| profile-rx | Italian launcher |
