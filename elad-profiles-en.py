@@ -39,7 +39,7 @@ def save_settings(settings):
 
 def restart_openwebrx():
     print(f"\n{YE}🔄 Restarting OpenWebRX...{R}")
-    subprocess.run(["systemctl", "restart", "openwebrx"])
+    subprocess.run(["sudo", "systemctl", "restart", "openwebrx"])
     print(f"{GR}✅ OpenWebRX restarted!{R}")
 
 def select_devices(settings, prompt=None):
