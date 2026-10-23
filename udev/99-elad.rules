@@ -1,1 +1,9 @@
+# ELAD FDM-S2
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1721", ATTRS{idProduct}=="061c", MODE="0666", GROUP="plugdev"
+
+# ELAD FDM-S1 (Warm boot / Normal state)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1721", ATTRS{idProduct}=="0610", MODE="0666", GROUP="plugdev"
+
+# ELAD FDM-S1 (Cold boot / Cypress FX2 state)
+SUBSYSTEM=="usb", ACTION=="add", ATTRS{idVendor}=="04b4", ATTRS{idProduct}=="8613", RUN+="/usr/sbin/fxload -I /lib/firmware/s1firmware.hex -t fx2 -D $env{DEVNAME}"
+
