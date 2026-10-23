@@ -1,11 +1,10 @@
-# SoapyELAD - ELAD FDM-S2 Driver for SoapySDR and OpenWebRX
+# SoapyELAD - ELAD FDM-S2 and FDM-S1 Driver for SoapySDR and OpenWebRX
 
-This project provides a SoapySDR plugin for the ELAD FDM-S2 SDR receiver on Linux,
-enabling its use with OpenWebRX and other SoapySDR-compatible software.
+This project provides a SoapySDR plugin for ELAD receivers on Linux, supporting various sample rates, FPGA programming, and OpenWebRX integration. For detailed requirements, hardware support, and dependencies, please refer to the documentation on {Link: GitHub https://github.com}
 
 ## Features
-- Full support for ELAD FDM-S2 on Linux
-- All sample rates: 192, 384, 768, 1536, 3072, 6144 kHz
+- Full support for ELAD FDM-S2 and FDM-S1 on Linux
+- All sample rates: 192, 384, 768, 1536, 3072, 6144 kHz (ELAD S2 only)
 - Automatic FPGA programming at startup
 - Integration with OpenWebRX
 
@@ -17,9 +16,9 @@ enabling its use with OpenWebRX and other SoapySDR-compatible software.
 - cmake, build-essential
 
 ## Hardware
-- ELAD FDM-S2 connected via USB 2.0
+- ELAD FDM-S2 or FDM-S1 connected via USB 2.0
 - Maximum stable sample rate: 3072 kHz (4 bytes/sample)
-- At 6144 kHz: 2 bytes/sample mode, ~4.9 MHz bandwidth
+- At 6144 kHz: 2 bytes/sample mode, ~4.9 MHz bandwidth (ELAD S2)
 
 ## Installation
 
@@ -86,7 +85,11 @@ Add devices in OpenWebRX settings. Example for all sample rates:
 | ELAD FDM-S2 1.5MHz | 1536000 | 1.2 MHz |
 | ELAD FDM-S2 3MHz | 3072000 | 2.4 MHz |
 | ELAD FDM-S2 6MHz | 6144000 | 4.9 MHz |
-
+| ELAD FDM-S1 192kHz | 192000 | 153 kHz |
+| ELAD FDM-S1 384kHz | 384000 | 307 kHz |
+| ELAD FDM-S1 768kHz | 768000 | 614 kHz |
+| ELAD FDM-S1 1.5MHz | 1536000 | 1.2 MHz |
+| ELAD FDM-S1 3MHz | 3072000 | 2.4 MHz |
 ## Notes
 - Each sample rate requires FPGA reprogramming (~6 seconds)
 - Only one device can be active at a time
@@ -114,6 +117,13 @@ Since this is a SoapySDR plugin, it works with any SoapySDR-compatible software:
 | CubicSDR | ✅ Compatible | Select SoapySDR source |
 | SDRangel | ✅ Compatible | Select SoapySDR source |
 
+## Running your SDR Software
+
+When launching your favorite SDR software (such as SDR++, GQRX, or CubicSDR), you must now specify the hardware model argument to let SoapySDR initialize the correct master clock and FPGA routing:
+
+- For **ELAD FDM-S1**: Use device arguments `driver=elad,product=FDM-S1`
+- For **ELAD FDM-S2**: Use device arguments `driver=elad,product=FDM-S2`
+
 ### Usage with non-OpenWebRX software
 
 Before launching any software, program the FPGA with the desired sample rate:
@@ -125,8 +135,6 @@ sudo /usr/local/bin/elad-firmware + 3   # 768 kHz
 sudo /usr/local/bin/elad-firmware + 2   # 384 kHz
 sudo /usr/local/bin/elad-firmware + 1   # 192 kHz
 ```
-
-Then select the device in your software using: `driver=elad`
 
 ## Profile Manager
 
