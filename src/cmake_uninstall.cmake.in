@@ -1,0 +1,21 @@
+if(NOT EXISTS "@CMAKE_BINARY_DIR@/install_manifest.txt")
+  message(FATAL_ERROR "Impossible de trouver le manifeste d'installation : \"@CMAKE_BINARY_DIR@/install_manifest.txt\"")
+endif()
+
+file(READ "@CMAKE_BINARY_DIR@/install_manifest.txt" files)
+string(REGEX REPLACE "\n" ";" files "${files}")
+foreach(file ${files})
+  message(STATUS "Désinstallation de : \"$ENV{DESTDIR}${file}\"")
+  if(IS_SYMLINK "$ENV{DESTDIR}${file}" OR EXISTS "$ENV{DESTDIR}${file}")
+    execute_process(
+      COMMAND "@CMAKE_COMMAND@" -E remove "$ENV{DESTDIR}${file}"
+      OUTPUT_VARIABLE rm_out
+      RESULT_VARIABLE rm_retval
+    )
+    if(NOT "${rm_retval}" STREQUAL 0)
+      message(FATAL_ERROR "Erreur lors de la suppression de : \"$ENV{DESTDIR}${file}\"")
+    endif()
+  else()
+    message(STATUS "Le fichier \"$ENV{DESTDIR}${file}\" n'existe pas.")
+  endif()
+endforeach()
