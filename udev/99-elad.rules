@@ -1,1 +1,7 @@
+# ELAD FDM-S2
 SUBSYSTEM=="usb", ATTRS{idVendor}=="1721", ATTRS{idProduct}=="061c", MODE="0666", GROUP="plugdev"
+
+# ELAD FDM-S1 (Warm boot / Normal state)
+SUBSYSTEM=="usb", ATTRS{idVendor}=="1721", ATTRS{idProduct}=="0610", MODE="0666", GROUP="plugdev"
+
+

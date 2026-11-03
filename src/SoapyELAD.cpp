@@ -13,29 +13,52 @@
 #include <thread>
 #include <unistd.h>
 
-#define ELAD_VID      0x1721
-#define ELAD_S2_PID   0x061c
-#define S_RATE        122880000.0
-#define EP_IN         0x86
-#define NUM_BUFFERS   15
-#define BUFFER_SIZE   262144
+#define ELAD_VID        0x1721
+#define ELAD_S1_PID     0x0610  // USB Product ID for FDM-S1
+#define ELAD_S2_PID     0x061c  // USB Product ID for FDM-S2
+
+#define S2_ADC_RATE     122880000.0
+#define S1_ADC_RATE      61440000.0
+
+#define EP_IN           0x86
+#define NUM_BUFFERS     15
+#define BUFFER_SIZE     262144
+
+enum DeviceModel {
+    MODEL_FDM_S1,
+    MODEL_FDM_S2
+};
 
 class SoapyELAD : public SoapySDR::Device
 {
 public:
-    SoapyELAD(const SoapySDR::Kwargs &) :
-        _dev(nullptr), _ctx(nullptr),
-        _frequency(100e6), _sampleRate(6144000),
-        _running(false), _currentSpeed(0),
-        _bufHead(0), _bufTail(0), _bufCount(0)
+    SoapyELAD(const SoapySDR::Kwargs &args) :
+    _dev(nullptr), _ctx(nullptr),
+    _frequency(100e6), _sampleRate(6144000),
+    _running(false), _currentSpeed(0),
+    _bufHead(0), _bufTail(0), _bufCount(0)
     {
+        // Deduce the hardware model based on discovery arguments
+        _model = MODEL_FDM_S2;
+        if (args.count("product") != 0 && args.at("product") == "FDM-S1") {
+            _model = MODEL_FDM_S1;
+            _adcRate = S1_ADC_RATE;
+            _sampleRate = 3072000; // Default sample rate better suited for FDM-S1
+            SoapySDR_log(SOAPY_SDR_INFO, "Configuring SoapyELAD for FDM-S1");
+        } else {
+            _model = MODEL_FDM_S2;
+            _adcRate = S2_ADC_RATE;
+        }
+
         libusb_init(&_ctx);
         _openDevice();
         _buffers.resize(NUM_BUFFERS);
         for (auto &b : _buffers) b.resize(BUFFER_SIZE);
         _transfers.resize(NUM_BUFFERS, nullptr);
         _bufFilled.resize(NUM_BUFFERS, 0);
-        SoapySDR_log(SOAPY_SDR_INFO, "ELAD FDM-S2 initialized");
+
+        std::string msg = (_model == MODEL_FDM_S1) ? "ELAD FDM-S1 initialized" : "ELAD FDM-S2 initialized";
+        SoapySDR_log(SOAPY_SDR_INFO, msg.c_str());
     }
 
     ~SoapyELAD()
@@ -46,14 +69,15 @@ public:
     }
 
     std::string getDriverKey() const { return "ELAD"; }
-    std::string getHardwareKey() const { return "FDM-S2"; }
+    std::string getHardwareKey() const { return (_model == MODEL_FDM_S1) ? "FDM-S1" : "FDM-S2"; }
     size_t getNumChannels(const int dir) const { return (dir == SOAPY_SDR_RX) ? 1 : 0; }
     std::vector<std::string> getStreamFormats(const int, const size_t) const { return {"CF32"}; }
     std::string getNativeStreamFormat(const int, const size_t, double &fullScale) const {
         fullScale = 2147483648.0; return "CS32";
     }
+
     SoapySDR::Stream *setupStream(const int dir, const std::string &,
-        const std::vector<size_t> &, const SoapySDR::Kwargs &)
+                                  const std::vector<size_t> &, const SoapySDR::Kwargs &)
     {
         if (dir != SOAPY_SDR_RX) throw std::runtime_error("Only RX supported");
         return (SoapySDR::Stream *)this;
@@ -67,7 +91,16 @@ public:
         if (newSpeed != _currentSpeed) {
             _closeDevice();
             usleep(200000);
-            std::string cmd = "/usr/local/bin/elad-firmware + " + std::to_string(newSpeed) + " > /dev/null 2>&1";
+
+            std::string cmd;
+            if (_model == MODEL_FDM_S1) {
+                // For FDM-S1, elad-firmware requires a '+' argument before the speed
+                cmd = "/usr/local/bin/elad-firmware + " + std::to_string(newSpeed) + " > /dev/null 2>&1";
+            } else {
+                // Standard command for FDM-S2
+                cmd = "/usr/local/bin/elad-firmware " + std::to_string(newSpeed) + " > /dev/null 2>&1";
+            }
+
             system(cmd.c_str());
             sleep(1);
             _openDevice();
@@ -84,7 +117,7 @@ public:
         for (int i = 0; i < NUM_BUFFERS; i++) {
             _transfers[i] = libusb_alloc_transfer(0);
             libusb_fill_bulk_transfer(_transfers[i], _dev, EP_IN,
-                _buffers[i].data(), BUFFER_SIZE, _staticCallback, this, 5000);
+                                      _buffers[i].data(), BUFFER_SIZE, _staticCallback, this, 5000);
             libusb_submit_transfer(_transfers[i]);
         }
         _running = true;
@@ -94,16 +127,16 @@ public:
                 libusb_handle_events_timeout_completed(_ctx, &tv, nullptr);
             }
         });
-        unsigned char buf[1];
-        libusb_control_transfer(_dev, 0xC0, 0xE9, 0x0001, 0x0000, buf, 1, 500);
+        unsigned char buf;
+        libusb_control_transfer(_dev, 0xC0, 0xE9, 0x0001, 0x0000, &buf, 1, 500);
         return 0;
     }
 
     int deactivateStream(SoapySDR::Stream *, const int, const long long)
     {
         if (!_running) return 0;
-        unsigned char buf[1];
-        libusb_control_transfer(_dev, 0xC0, 0xE9, 0x0000, 0x0000, buf, 1, 500);
+        unsigned char buf;
+        libusb_control_transfer(_dev, 0xC0, 0xE9, 0x0000, 0x0000, &buf, 1, 500);
         _running = false;
         _cv.notify_all();
         for (auto t : _transfers) if (t) libusb_cancel_transfer(t);
@@ -115,7 +148,7 @@ public:
     }
 
     int readStream(SoapySDR::Stream *, void * const *buffs,
-        const size_t numElems, int &, long long &, const long timeoutUs)
+                   const size_t numElems, int &, long long &, const long timeoutUs)
     {
         if (!_running) return SOAPY_SDR_TIMEOUT;
         std::unique_lock<std::mutex> lock(_mutex);
@@ -127,7 +160,9 @@ public:
         int filled = _bufFilled[idx];
         lock.unlock();
 
-        int bps = (_sampleRate >= 6144000) ? 2 : 4;
+        // On FDM-S1, the raw stream typically uses 4 bytes per I/Q channel (CS32 / 24-bit encapsulated)
+        // or 2 bytes depending on the chosen decimation/sample rate.
+        int bps = (_model == MODEL_FDM_S2 && _sampleRate >= 6144000) ? 2 : 4;
         size_t nSamples = std::min(numElems, (size_t)(filled / (bps * 2)));
         float *out = (float *)buffs[0];
         if (bps == 2) {
@@ -146,7 +181,7 @@ public:
             _bufFilled[idx] = 0;
         }
         libusb_fill_bulk_transfer(_transfers[idx], _dev, EP_IN,
-            _buffers[idx].data(), BUFFER_SIZE, _staticCallback, this, 5000);
+                                  _buffers[idx].data(), BUFFER_SIZE, _staticCallback, this, 5000);
         libusb_submit_transfer(_transfers[idx]);
         return nSamples;
     }
@@ -156,24 +191,38 @@ public:
 
     double getFrequency(const int, const size_t) const { return _frequency; }
     SoapySDR::RangeList getFrequencyRange(const int, const size_t) const {
+        // FDM-S1 comfortably covers 100 kHz up to 30 MHz (up to 54 MHz with undersampling modes)
+        if (_model == MODEL_FDM_S1) {
+            return {SoapySDR::Range(100e3, 54e6)};
+        }
         return {SoapySDR::Range(100e3, 260e6)};
     }
     void setSampleRate(const int, const size_t, const double rate) { _sampleRate = rate; }
     double getSampleRate(const int, const size_t) const { return _sampleRate; }
+
     std::vector<double> listSampleRates(const int, const size_t) const {
+        if (_model == MODEL_FDM_S1) {
+            // Typical sample rates for FDM-S1 (decimations from 61.44 MHz clock)
+            return {192000, 384000, 768000, 1536000, 3072000};
+        }
         return {192000, 384000, 768000, 1536000, 3072000, 6144000};
     }
 
     static void _staticCallback(libusb_transfer *t)
     { ((SoapyELAD *)t->user_data)->_handleCallback(t); }
 
+
     void _handleCallback(libusb_transfer *t)
     {
         if (!_running) return;
         if (t->status == LIBUSB_TRANSFER_COMPLETED) {
             int idx = -1;
-            for (int i = 0; i < NUM_BUFFERS; i++)
-                if (_transfers[i] == t) { idx = i; break; }
+            for (int i = 0; i < NUM_BUFFERS; i++) {
+                if (_transfers[i] == t) {
+                    idx = i;
+                    break;
+                }
+            }
             if (idx >= 0) {
                 std::lock_guard<std::mutex> lock(_mutex);
                 if (_bufCount < NUM_BUFFERS) {
@@ -204,6 +253,10 @@ private:
     std::mutex _mutex;
     std::condition_variable _cv;
 
+    // Hardware configuration properties
+    DeviceModel _model;
+    double _adcRate;
+
     int _speedFromRate(double r) {
         if (r >= 6144000) return 6;
         if (r >= 3072000) return 5;
@@ -214,8 +267,12 @@ private:
     }
 
     void _openDevice() {
-        _dev = libusb_open_device_with_vid_pid(_ctx, ELAD_VID, ELAD_S2_PID);
-        if (!_dev) throw std::runtime_error("ELAD FDM-S2 not found");
+        uint16_t pid = (_model == MODEL_FDM_S1) ? ELAD_S1_PID : ELAD_S2_PID;
+        _dev = libusb_open_device_with_vid_pid(_ctx, ELAD_VID, pid);
+        if (!_dev) {
+            std::string name = (_model == MODEL_FDM_S1) ? "ELAD FDM-S1" : "ELAD FDM-S2";
+            throw std::runtime_error(name + " not found");
+        }
         if (libusb_kernel_driver_active(_dev, 0))
             libusb_detach_kernel_driver(_dev, 0);
         libusb_set_configuration(_dev, 1);
@@ -232,8 +289,9 @@ private:
 
     void _setFreq(double hz) {
         if (!_dev) return;
-        double t = hz - floor(hz / S_RATE) * S_RATE;
-        uint32_t w = (uint32_t)((4294967296.0 * t) / S_RATE);
+        // Frequency word calculation using the dynamic master clock (_adcRate)
+        double t = hz - floor(hz / _adcRate) * _adcRate;
+        uint32_t w = (uint32_t)((4294967296.0 * t) / _adcRate);
         unsigned char buf[2] = {0, 0};
         libusb_control_transfer(_dev, 0x40, 0xF2, w&0xFFFF, (w>>16)&0xFFFF, buf, 2, 500);
     }
@@ -241,9 +299,15 @@ private:
     void _setFilter(double freq) {
         if (!_dev) return;
         uint8_t fl;
-        if (freq < 61440000) fl = 0x03;
-        else if (freq < 122880000) fl = 0x02;
-        else fl = 0x04;
+        if (_model == MODEL_FDM_S1) {
+            // FDM-S1 features a hardware HF low-pass filter at 30 MHz or bypass
+            fl = (freq < 30000000) ? 0x01 : 0x00;
+        } else {
+            // Original hardware filters for FDM-S2
+            if (freq < 61440000) fl = 0x03;
+            else if (freq < 122880000) fl = 0x02;
+            else fl = 0x04;
+        }
         unsigned char buf[1];
         libusb_control_transfer(_dev, 0xC0, 0xF7, fl, 0x0002, buf, 1, 500);
     }
@@ -255,14 +319,28 @@ static SoapySDR::KwargsList findELAD(const SoapySDR::Kwargs &) {
     SoapySDR::KwargsList results;
     libusb_context *ctx = nullptr;
     libusb_init(&ctx);
+
+    // Adaptive discovery loop probing FDM-S2 first, then FDM-S1
     libusb_device_handle *dev = libusb_open_device_with_vid_pid(ctx, ELAD_VID, ELAD_S2_PID);
     if (dev) {
         SoapySDR::Kwargs info;
         info["label"] = "ELAD FDM-S2";
+        info["product"] = "FDM-S2";
         info["driver"] = "ELAD";
         results.push_back(info);
         libusb_close(dev);
     }
+
+    dev = libusb_open_device_with_vid_pid(ctx, ELAD_VID, ELAD_S1_PID);
+    if (dev) {
+        SoapySDR::Kwargs info;
+        info["label"] = "ELAD FDM-S1";
+        info["product"] = "FDM-S1";
+        info["driver"] = "ELAD";
+        results.push_back(info);
+        libusb_close(dev);
+    }
+
     libusb_exit(ctx);
     return results;
 }
